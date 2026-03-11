@@ -17,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
+  "https://karma-frontend-jet.vercel.app"
  
 ];
 
