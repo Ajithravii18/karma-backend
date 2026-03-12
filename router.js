@@ -167,7 +167,7 @@ router.post("/api/user/live-help", authMiddleware, rh.liveHelpRequest);
 // 9. AI CHATBOT OPERATIONS
 // ==========================================
 
-router.post("/api/chatbot/gemini", authMiddleware, rh.chatWithGemini);
+router.post("/chatbot/gemini", authMiddleware, rh.chatWithGemini);
 
 
 
