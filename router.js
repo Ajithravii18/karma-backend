@@ -35,7 +35,7 @@ router.post("/login", rh.login);
 router.post("/send-reset-otp", rh.sendResetOtp);
 router.post("/reset-password", rh.resetPassword);
 router.get("/api/food/public-feed", rh.getPublicFoodFeed);
-router.post("/api/chatbot/gemini", authMiddleware, rh.chatWithGemini);
+
 
 // ==========================================
 // 2. USER PROFILE & STATS
