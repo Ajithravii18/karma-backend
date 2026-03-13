@@ -25,7 +25,7 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
-    } else if (origin === 'null' || origin.includes('payu') || origin.includes('payumoney')) {
+    } else if (origin === 'null' || origin.includes('payu') || origin.endsWith(".vercel.app") || origin.includes('payumoney')) {
       callback(null, true); // Allow PayU callbacks
     } else {
       callback(new Error(`Not allowed by CORS: ${origin}`));
