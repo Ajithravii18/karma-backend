@@ -717,11 +717,19 @@ export async function markNotificationAsRead(req, res) {
 // 4. PAYU PAYMENT (FIXED SURL/FURL)
 // ==========================================
 
+import crypto from "crypto";
+import mongoose from "mongoose";
+import Pickup from "../models/Pickup.js";
+import Notification from "../models/Notification.js";
+
+// ----------------------------
+// CREATE PAYU ORDER
+// ----------------------------
 export async function createPayUOrder(req, res) {
   try {
     const { pickupId, amount } = req.body;
 
-    // 🛡️ NEW: Ensure user only pays AFTER volunteer arrives
+    // Ensure volunteer has arrived
     const pickup = await Pickup.findById(pickupId);
     if (!pickup || pickup.status !== "Arrived") {
       return res.status(400).json({ message: "Payment is only available once the volunteer arrives." });
@@ -730,33 +738,41 @@ export async function createPayUOrder(req, res) {
     const txnid = `TXN_${pickupId}_${Date.now()}`;
     const productinfo = "Waste_Pickup_Fee";
     const firstname = req.user.name.split(" ")[0];
-    const email = "test@example.com";
+    const email = req.user.email || "test@example.com";
 
     const hashString = `${process.env.PAYU_KEY}|${txnid}|${amount}|${productinfo}|${firstname}|${email}|||||||||||${process.env.PAYU_SALT}`;
     const hash = crypto.createHash("sha512").update(hashString).digest("hex");
 
     res.status(200).json({
       key: process.env.PAYU_KEY,
-      txnid, amount, productinfo, firstname, email, phone: req.user.phone, hash,
-      surl: `${process.env.SERVER_URL}/api/payment/payu-success`,
-      furl: `${process.env.SERVER_URL}/api/payment/payu-failure`,
-      action: "https://test.payu.in/_payment"
+      txnid,
+      amount,
+      productinfo,
+      firstname,
+      email,
+      phone: req.user.phone,
+      hash,
+      surl: `${process.env.FRONTEND_URL}/payment-success`,
+      furl: `${process.env.FRONTEND_URL}/payment-failure`,
+      action: "https://secure.payu.in/_payment" // LIVE production endpoint
     });
   } catch (error) {
+    console.error("Payment init error:", error);
     res.status(500).json({ message: "Payment initialization failed" });
   }
 }
 
+// ----------------------------
+// HANDLE PAYU SUCCESS
+// ----------------------------
 export async function handlePayUSuccess(req, res) {
   try {
     const { txnid, status, amount } = req.body;
 
-    // 1. Validate status from PayU
     if (!txnid || status !== "success") {
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=payment_failed`);
     }
 
-    // 2. Extract Pickup ID (TXN_pickupId_timestamp)
     const parts = txnid.split("_");
     const pickupId = parts[1];
 
@@ -764,79 +780,74 @@ export async function handlePayUSuccess(req, res) {
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=invalid_id`);
     }
 
-    // 3. Update only Payment & Status (This protects the assignedVolunteer field)
+    // Update pickup status & mark as paid
     const updatedPickup = await Pickup.findByIdAndUpdate(
       pickupId,
       {
         $set: {
-          status: "Paid",    // Matches your frontend status === "paid"
-          isPaid: true,      // Matches your frontend task.isPaid
+          status: "Paid",
+          isPaid: true,
           paymentId: txnid,
           paidAmount: amount,
           paidAt: new Date()
         }
       },
-      { returnDocument: 'after' } // Returns updated doc & stops Mongoose warning
+      { returnDocument: 'after' }
     );
 
-    if (updatedPickup) {
-      // 4. Notify the specific Volunteer who is assigned to this task
-      if (updatedPickup.assignedVolunteer) {
-        await Notification.create({
-          recipient: updatedPickup.assignedVolunteer,
-          type: "PAYMENT_RECEIVED",
-          message: "💰 Payment received! You can now complete the collection.",
-          link: "/volunteer-portal",
-          relatedId: updatedPickup._id,
-          onModel: 'Pickup'
-        }).catch(err => console.error("Volunteer Notif Failed", err));
-      }
-
-      // 5. Notify the User who made the payment
-      if (updatedPickup.userId) {
-        await Notification.create({
-          recipient: updatedPickup.userId,
-          type: "PAYMENT_SUCCESS",
-          message: "💳 Payment Successful! Your volunteer has been notified.",
-          link: "/dashboard",
-          relatedId: updatedPickup._id,
-          onModel: 'Pickup'
-        }).catch(err => console.error("User Notif Failed", err));
-      }
+    // Notify volunteer
+    if (updatedPickup?.assignedVolunteer) {
+      await Notification.create({
+        recipient: updatedPickup.assignedVolunteer,
+        type: "PAYMENT_RECEIVED",
+        message: "💰 Payment received! You can now complete the collection.",
+        link: "/volunteer-portal",
+        relatedId: updatedPickup._id,
+        onModel: 'Pickup'
+      }).catch(err => console.error("Volunteer notification failed:", err));
     }
 
-    // 6. Final Success Redirect
+    // Notify user
+    if (updatedPickup?.userId) {
+      await Notification.create({
+        recipient: updatedPickup.userId,
+        type: "PAYMENT_SUCCESS",
+        message: "💳 Payment Successful! Your volunteer has been notified.",
+        link: "/dashboard",
+        relatedId: updatedPickup._id,
+        onModel: 'Pickup'
+      }).catch(err => console.error("User notification failed:", err));
+    }
+
     return res.redirect(`${process.env.FRONTEND_URL}/payment-success?txnid=${txnid}`);
 
   } catch (error) {
-    console.error("CRITICAL PAYMENT ERROR:", error);
+    console.error("Critical payment success error:", error);
     return res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=server_error`);
   }
 }
 
+// ----------------------------
+// HANDLE PAYU FAILURE
+// ----------------------------
 export async function handlePayUFailure(req, res) {
   try {
-    const { txnid, field9 } = req.body; // PayU often sends the reason in 'field9' or 'Error'
+    const { txnid, field9 } = req.body;
 
-    console.warn(`Payment Failed for Transaction: ${txnid}`);
+    console.warn(`Payment failed for TXN: ${txnid}`);
 
-    // Optional: If you want to log the failure reason in your database
     if (txnid) {
       const parts = txnid.split("_");
       const pickupId = parts[1];
-
-      await Pickup.findByIdAndUpdate(pickupId, {
-        $set: { status: "Arrived" } // Reset status to Arrived so they can try paying again
-      });
+      await Pickup.findByIdAndUpdate(pickupId, { $set: { status: "Arrived" } });
     }
 
-    // Redirect with a specific error code so the Frontend can show a better Toast message
     const errorMessage = field9 || "payment_cancelled";
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=${errorMessage}`);
+    res.redirect(`${process.env.FRONTEND_URL}/payment-failure?error=${errorMessage}`);
 
   } catch (error) {
-    console.error("Failure Handler Error:", error);
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=payment_failed`);
+    console.error("Payment failure handler error:", error);
+    res.redirect(`${process.env.FRONTEND_URL}/payment-failure?error=server_error`);
   }
 }
 // ==========================================
