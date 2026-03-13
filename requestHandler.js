@@ -717,14 +717,9 @@ export async function markNotificationAsRead(req, res) {
 // 4. PAYU PAYMENT (FIXED SURL/FURL)
 // ==========================================
 
-import crypto from "crypto";
-import mongoose from "mongoose";
-import Pickup from "../models/Pickup.js";
-import Notification from "../models/Notification.js";
 
-// ----------------------------
-// CREATE PAYU ORDER
-// ----------------------------
+
+
 export async function createPayUOrder(req, res) {
   try {
     const { pickupId, amount } = req.body;
