@@ -2164,7 +2164,7 @@ export async function chatWithGemini(req, res) {
 
     // Initialize the model with system instruction
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       systemInstruction: `You are the e-Karma Assistant, a highly intelligent and specialized AI assistant for the e-Karma platform in India.
       Your tone is professional, eco-conscious, deeply helpful, and empathetic. 
       
