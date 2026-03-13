@@ -2147,6 +2147,12 @@ export async function chatWithGemini(req, res) {
   
   try {
      console.log("Gemini Key:", process.env.GEMINI_API_KEY?.slice(0,8));
+    async function listModels() {
+  const res = await client.listModels();
+  console.log(res);
+}
+
+listModels();
     const { prompt, history } = req.body;
 
     if (!prompt) {
