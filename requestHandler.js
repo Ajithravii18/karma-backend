@@ -2149,13 +2149,11 @@ export async function dismissHelp(req, res) {
 
 
 
+
+
 export async function chatWithGemini(req, res) {
   try {
     const { prompt } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ message: "Prompt is required" });
-    }
 
     const groq = new Groq({
       apiKey: process.env.GROQ_API_KEY
@@ -2164,16 +2162,15 @@ export async function chatWithGemini(req, res) {
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       messages: [
-        {
-          role: "user",
-          content: prompt
-        }
+        { role: "user", content: prompt }
       ]
     });
 
     const reply = completion.choices[0].message.content;
 
-    res.json({ reply });
+    res.json({
+      response: reply
+    });
 
   } catch (error) {
     console.error("Groq AI error:", error);
