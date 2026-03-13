@@ -2195,9 +2195,13 @@ export async function chatWithGemini(req, res) {
 
     const response = result.response.text();
     res.status(200).json({ response });
-
-  } catch (error) {
+} catch (error) {
     console.error("Gemini Backend Error:", error);
-    res.status(500).json({ message: "Failed to fetch AI response" });
+    
+    // CHANGE THIS: Send the actual error back to the frontend temporarily
+    res.status(500).json({ 
+      message: "Failed to fetch AI response",
+      error: error.message,      // <--- This will tell us "API Key Invalid" or "Location not supported"
+      stack: error.stack 
+    });
   }
-}
