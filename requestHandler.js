@@ -2188,8 +2188,7 @@ export async function chatWithGemini(req, res) {
     });
 
   } catch (error) {
- console.error("Gemini error:", error);
+    console.error("Gemini error:", error);
     res.status(500).json({ error: error.message });
-    });
   }
 }
