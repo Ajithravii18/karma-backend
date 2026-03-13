@@ -2150,37 +2150,7 @@ export async function dismissHelp(req, res) {
 
 let cachedModelName = null;
 
-export async function initGeminiModel(apiKey) {
-  if (!apiKey) {
-    console.error("GEMINI_API_KEY not configured");
-    return null;
-  }
 
-  const client = new GoogleGenerativeAI({ apiKey });
-
-  try {
-    console.log("Listing available models...");
-    const models = await client.listModels(); // ✅ Use the official method
-    console.log("Models available:", models.map(m => m.name));
-
-    // Pick a chat-capable model
-    const model = models.find(m =>
-      m.name.includes("bison") && m.supportedGenerationMethods.includes("generateMessage")
-    );
-
-    if (model) {
-      cachedModelName = model.name;
-      console.log("Using model:", cachedModelName);
-      return cachedModelName;
-    }
-
-    console.warn("No suitable Gemini model found in your account");
-    return null;
-  } catch (err) {
-    console.error("Model discovery error:", err);
-    return null;
-  }
-}
 
 
 
