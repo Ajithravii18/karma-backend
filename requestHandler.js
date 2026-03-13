@@ -1026,7 +1026,7 @@ export async function getUserActivity(req, res) {
       LeftoverFoodReport.find({ userId: req.userID }).lean()
     ]);
     const activity = [
-      ...p.map(x => ({ ...x, activityType: 'Pickup', date: x.createdAt })),
+      ...p.map(x => ({ ...x, activityType: 'Pickup', date: x.createdAt, txnId: x.paymentId })),
       ...po.map(x => ({ ...x, activityType: 'Pollution', date: x.createdAt })),
       ...f.map(x => ({ ...x, activityType: 'Food', date: x.createdAt }))
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1056,6 +1056,7 @@ export async function getUserPickups(req, res) {
 
   const results = pickups.map(p => ({
     ...p,
+    txnId: p.paymentId, // 👈 Ensures the frontend has the correct key for receipt generation
     review: reviewsMap[p._id.toString()] || null
   }));
   res.json(results);
