@@ -10,7 +10,7 @@ import bcrypt from "bcrypt";
 import pkg from "jsonwebtoken";
 import crypto from "crypto";
 import mongoose from "mongoose";
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
 
 
@@ -2149,14 +2149,6 @@ export async function dismissHelp(req, res) {
 
 
 
-let cachedModelName = null;
-
-
-
-
-
-
-
 export async function chatWithGemini(req, res) {
   try {
     const { prompt } = req.body;
@@ -2165,21 +2157,26 @@ export async function chatWithGemini(req, res) {
       return res.status(400).json({ message: "Prompt is required" });
     }
 
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY
     });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      contents: prompt
+    const completion = await groq.chat.completions.create({
+      model: "llama3-8b-8192",
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ]
     });
 
-    res.json({
-      reply: response.text
-    });
+    const reply = completion.choices[0].message.content;
+
+    res.json({ reply });
 
   } catch (error) {
-    console.error("Gemini error:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Groq AI error:", error);
+    res.status(500).json({ message: "AI service error" });
   }
 }
