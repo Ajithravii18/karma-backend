@@ -2145,10 +2145,9 @@ export async function dismissHelp(req, res) {
 
 
 
-// Global variable to cache the model name
+
 let cachedModelName = null;
 
-// Function to initialize and cache the model on server startup
 export async function initGeminiModel(apiKey) {
   if (!apiKey) {
     console.error("GEMINI_API_KEY not configured");
@@ -2158,74 +2157,71 @@ export async function initGeminiModel(apiKey) {
   const client = new GoogleGenerativeAI({ apiKey });
 
   try {
-    const modelsResponse = await client.listModels();
-    console.log("Available models:", modelsResponse.models.map(m => m.name));
+    console.log("Discovering models...");
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    const data = await res.json();
 
-    // Pick the first text-bison model
-    const validModel = modelsResponse.models.find(m => m.name.includes("text-bison"))?.name;
-
-    if (!validModel) {
-      console.error("No valid AI models available");
-      return null;
+    if (data.models?.length) {
+      const model = data.models.find(m =>
+        m.name.includes("gemini") && m.supportedGenerationMethods?.includes("generateContent")
+      );
+      if (model) {
+        cachedModelName = model.name;
+        console.log("Using model:", cachedModelName);
+        return cachedModelName;
+      }
     }
 
-    console.log("Using model:", validModel);
-    cachedModelName = validModel; // cache it globally
-    return validModel;
-  } catch (error) {
-    console.error("Failed to list AI models:", error);
+    // fallback
+    const fallbackModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+    for (const modelName of fallbackModels) {
+      try {
+        await client.getGenerativeModel({ model: modelName }).generateContent("test");
+        cachedModelName = modelName;
+        console.log("Found working model:", cachedModelName);
+        return cachedModelName;
+      } catch {}
+    }
+
+    console.warn("No working Gemini model found");
+    return null;
+
+  } catch (err) {
+    console.error("Model discovery error:", err);
     return null;
   }
 }
 
-// Chat endpoint
 export async function chatWithGemini(req, res) {
+  const { prompt, history } = req.body;
+  if (!prompt) return res.status(400).json({ message: "Prompt is required" });
+
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) return res.status(500).json({ message: "AI service not configured" });
+
+  if (!cachedModelName) await initGeminiModel(GEMINI_API_KEY);
+  if (!cachedModelName) return res.status(500).json({ message: "No AI model available" });
+
   try {
-    const { prompt, history } = req.body;
-
-    if (!prompt) return res.status(400).json({ message: "Prompt is required" });
-
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ message: "AI service not configured" });
-    }
-
-    // Ensure model is cached
-    if (!cachedModelName) {
-      await initGeminiModel(GEMINI_API_KEY);
-      if (!cachedModelName) {
-        return res.status(500).json({ message: "No AI model available" });
-      }
-    }
-
     const client = new GoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
 
-    // System instruction
-    const systemInstruction = `You are the e-Karma Assistant, a professional AI for environmental sustainability...`;
+    const systemInstruction = `You are the e-Karma Assistant...`;
 
-    // Convert chat history
-    const geminiHistory = history?.map(msg => ({
+    const chatHistory = history?.map(msg => ({
       role: msg.type === "user" ? "user" : "assistant",
       parts: [{ text: msg.text }]
     })) || [];
 
-    // Start chat
-    const model = client.getGenerativeModel({
-      model: cachedModelName,
-      systemInstruction
-    });
-
-    const chat = model.startChat({ history: geminiHistory });
+    const model = client.getGenerativeModel({ model: cachedModelName, systemInstruction });
+    const chat = model.startChat({ history: chatHistory });
     const result = await chat.sendMessage(prompt);
-    const responseText = result.response.text();
 
-    res.status(200).json({ response: responseText });
+    res.status(200).json({ response: result.response.text() });
+
   } catch (error) {
-    console.error("Gemini Backend Error:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-    res.status(500).json({
-      message: "Failed to fetch AI response",
-      error: error.message,
-      stack: error.stack
-    });
+    console.error("Gemini Backend Error:", error);
+    res.status(500).json({ message: "Failed to fetch AI response", error: error.message });
   }
 }
