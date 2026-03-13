@@ -10,7 +10,8 @@ import bcrypt from "bcrypt";
 import pkg from "jsonwebtoken";
 import crypto from "crypto";
 import mongoose from "mongoose";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+
 
 
 const { sign } = pkg;
@@ -2154,37 +2155,27 @@ let cachedModelName = null;
 
 
 
+
+
 export async function chatWithGemini(req, res) {
   try {
-    const { prompt, history } = req.body;
+    const { prompt } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ message: "Prompt is required" });
     }
 
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ message: "Gemini API key not configured" });
-    }
-
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-    const model = genAI.getGenerativeModel({
-     model: "gemini-1.5-flash-002"
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY
     });
 
-    const chatHistory = history?.map(msg => ({
-      role: msg.type === "user" ? "user" : "model",
-      parts: [{ text: msg.text }]
-    })) || [];
-
-    const chat = model.startChat({ history: chatHistory });
-
-    const result = await chat.sendMessage(prompt);
-    const response = await result.response;
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: prompt
+    });
 
     res.json({
-      reply: response.text()
+      reply: response.text
     });
 
   } catch (error) {
