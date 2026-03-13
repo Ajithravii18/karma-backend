@@ -2144,6 +2144,7 @@ export async function dismissHelp(req, res) {
 // ==========================================
 
 export async function chatWithGemini(req, res) {
+   console.log("Gemini Key:", process.env.GEMINI_API_KEY?.slice(0,8));
   try {
     const { prompt, history } = req.body;
 
