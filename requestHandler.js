@@ -2188,10 +2188,8 @@ export async function chatWithGemini(req, res) {
     });
 
   } catch (error) {
-    console.error("Gemini Error:", error);
-    res.status(500).json({
-      message: "Failed to fetch AI response",
-      error: error.message
+ console.error("Gemini error:", error);
+    res.status(500).json({ error: error.message });
     });
   }
 }
