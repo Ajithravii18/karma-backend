@@ -2182,31 +2182,46 @@ export async function initGeminiModel(apiKey) {
   }
 }
 
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 export async function chatWithGemini(req, res) {
-  const { prompt, history } = req.body;
-  if (!prompt) return res.status(400).json({ message: "Prompt is required" });
-
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  if (!GEMINI_API_KEY) return res.status(500).json({ message: "AI service not configured" });
-
-  if (!cachedModelName) await initGeminiModel(GEMINI_API_KEY);
-  if (!cachedModelName) return res.status(500).json({ message: "No AI model available" });
-
   try {
-    const client = new GoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
-    const model = client.getGenerativeModel({ model: cachedModelName });
+    const { prompt, history } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ message: "Prompt is required" });
+    }
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ message: "Gemini API key not configured" });
+    }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash"
+    });
 
     const chatHistory = history?.map(msg => ({
-      role: msg.type === "user" ? "user" : "assistant",
-      content: [{ text: msg.text }]
+      role: msg.type === "user" ? "user" : "model",
+      parts: [{ text: msg.text }]
     })) || [];
 
     const chat = model.startChat({ history: chatHistory });
-    const result = await chat.sendMessage(prompt);
 
-    res.status(200).json({ response: result.responseText || result.response?.text() });
+    const result = await chat.sendMessage(prompt);
+    const response = await result.response;
+
+    res.json({
+      reply: response.text()
+    });
+
   } catch (error) {
-    console.error("Gemini Backend Error:", error);
-    res.status(500).json({ message: "Failed to fetch AI response", error: error.message });
+    console.error("Gemini Error:", error);
+    res.status(500).json({
+      message: "Failed to fetch AI response",
+      error: error.message
+    });
   }
 }
