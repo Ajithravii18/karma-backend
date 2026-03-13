@@ -2170,7 +2170,7 @@ export async function chatWithGemini(req, res) {
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
-     model: "gemini-1.5-pro"
+     model: "gemini-1.5-flash-002"
     });
 
     const chatHistory = history?.map(msg => ({
