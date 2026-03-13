@@ -2205,3 +2205,4 @@ export async function chatWithGemini(req, res) {
       stack: error.stack 
     });
   }
+}
