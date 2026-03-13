@@ -2170,7 +2170,7 @@ export async function chatWithGemini(req, res) {
     });
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-1.0-pro",
       contents: prompt
     });
 
