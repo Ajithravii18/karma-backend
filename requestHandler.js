@@ -2143,74 +2143,59 @@ export async function dismissHelp(req, res) {
 // 9. AI CHATBOT OPERATIONS
 // ==========================================
 
-export async function chatWithGemini(req, res) {
-  
-  try {
-     console.log("Gemini Key:", process.env.GEMINI_API_KEY?.slice(0,8));
-    async function listModels() {
-  const res = await client.listModels();
-  console.log(res);
-}
 
-listModels();
+
+export async function chatWithGemini(req, res) {
+  try {
     const { prompt, history } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ message: "Prompt is required" });
-    }
+    if (!prompt) return res.status(400).json({ message: "Prompt is required" });
 
-    // Get Gemini API key from environment variables (secure)
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
     if (!GEMINI_API_KEY) {
-      console.error("Gemini API key not configured in server environment");
+      console.error("Gemini API key not configured");
       return res.status(500).json({ message: "AI service not configured" });
     }
 
-    // Initialize Google Generative AI
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    // Initialize Google Generative AI client
+    const client = new GoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
 
-    // Initialize the model with system instruction
-    const model = genAI.getGenerativeModel({
-      model: "gemini-pro",
-      systemInstruction: `You are the e-Karma Assistant, a highly intelligent and specialized AI assistant for the e-Karma platform in India.
-      Your tone is professional, eco-conscious, deeply helpful, and empathetic. 
-      
-      About the Project (e-Karma):
-      e-Karma is a comprehensive platform focused on environmental sustainability. It has three main modules:
-      1. Waste Management (Pickups): Users can schedule waste pickups (solid, liquid, electronic waste, etc.). Volunteers are assigned to these pickups, they arrive at the location, users make a payment via the PayU gateway, and then the waste is collected.
-      2. Food Sharing (Donations): Users can report leftover or surplus food to prevent food waste. They provide details like quantity, expiry time, and location. Volunteers claim these food missions and deliver them to those in need (or shelters).
-      3. Pollution Reporting: Users can report environmental hazards or pollution (e.g., illegal dumping, water pollution) by dropping a pin on a Google Map and uploading photos. Admins verify these reports, and volunteers might be assigned to clean them up.
-      
-      User Roles in e-Karma:
-      - Normal User: Can donate food, request waste pickups, report pollution, and make payments.
-      - Volunteer: Has a dedicated "Mission Board" / "Volunteer Portal" to view available tasks. They accept and execute waste pickups, food deliveries, and pollution cleanups.
-      - Admin: Manages the system, verifies pollution reports, views revenue, and can freeze accounts that violate guidelines.
+    // STEP 1: Get a valid model dynamically
+    const modelsResponse = await client.listModels();
+    // Pick the first available text model (adjust if needed)
+    const validModel = modelsResponse.models.find(m => m.name.includes("text-bison"))?.name;
 
-      If a user asks how to do something, guide them to the respective section (e.g., "Waste Pickup", "Food Sharing", "Report Pollution"). 
-      Always be encouraging about their environmental efforts. Politely decline any off-topic questions (like sports, movies, coding, or politics) and smoothly redirect the conversation back to environmental services, waste management, or food sharing.`
+    if (!validModel) {
+      return res.status(500).json({ message: "No valid AI models available" });
+    }
+
+    // STEP 2: Prepare system instruction
+    const systemInstruction = `You are the e-Karma Assistant, ...`; // keep your full instruction here
+
+    // STEP 3: Convert chat history
+    const geminiHistory = history?.map(msg => ({
+      role: msg.type === 'user' ? 'user' : 'assistant',
+      parts: [{ text: msg.text }]
+    })) || [];
+
+    // STEP 4: Start chat
+    const model = client.getGenerativeModel({
+      model: validModel,
+      systemInstruction
     });
 
-    // Convert history format for Gemini SDK
-    const geminiHistory = history ? history.map(msg => ({
-      role: msg.type === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    })) : [];
-
-    // Start chat with history
     const chat = model.startChat({ history: geminiHistory });
     const result = await chat.sendMessage(prompt);
 
-    const response = result.response.text();
-    res.status(200).json({ response });
-} catch (error) {
+    const responseText = result.response.text();
+    res.status(200).json({ response: responseText });
+
+  } catch (error) {
     console.error("Gemini Backend Error:", error);
-    
-    // CHANGE THIS: Send the actual error back to the frontend temporarily
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Failed to fetch AI response",
-      error: error.message,      // <--- This will tell us "API Key Invalid" or "Location not supported"
-      stack: error.stack 
+      error: error.message,
+      stack: error.stack
     });
   }
 }
