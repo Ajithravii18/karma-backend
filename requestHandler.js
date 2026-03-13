@@ -730,7 +730,12 @@ export async function createPayUOrder(req, res) {
       return res.status(400).json({ message: "Payment is only available once the volunteer arrives." });
     }
 
-    const txnid = `TXN_${pickupId}_${Date.now()}`;
+    // Generate a unique 17-character txnid (max 25 allowed)
+    const txnid = `TXN_${Date.now()}`;
+
+    // Store this transaction ID in the pickup document to find it on callback
+    await Pickup.findByIdAndUpdate(pickupId, { $set: { paymentId: txnid } });
+
     const productinfo = "Waste_Pickup_Fee";
     const firstname = req.user.name.split(" ")[0];
     const email = req.user.email || "test@example.com";
@@ -747,9 +752,9 @@ export async function createPayUOrder(req, res) {
       email,
       phone: req.user.phone,
       hash,
-      surl: `${process.env.FRONTEND_URL}/payment-success`,
-      furl: `${process.env.FRONTEND_URL}/payment-failure`,
-      action: "https://secure.payu.in/_payment" // LIVE production endpoint
+      surl: `${process.env.SERVER_URL}/api/payment/payu-success`,
+      furl: `${process.env.SERVER_URL}/api/payment/payu-failure`,
+      action: "https://test.payu.in/_payment" // Test environment endpoint
     });
   } catch (error) {
     console.error("Payment init error:", error);
@@ -764,31 +769,29 @@ export async function handlePayUSuccess(req, res) {
   try {
     const { txnid, status, amount } = req.body;
 
+    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+
     if (!txnid || status !== "success") {
-      return res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=payment_failed`);
+      return res.redirect(`${frontendUrl}/dashboard?error=payment_failed`);
     }
 
-    const parts = txnid.split("_");
-    const pickupId = parts[1];
-
-    if (!pickupId || !mongoose.Types.ObjectId.isValid(pickupId)) {
-      return res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=invalid_id`);
-    }
-
-    // Update pickup status & mark as paid
-    const updatedPickup = await Pickup.findByIdAndUpdate(
-      pickupId,
+    // Find pickup by txnid instead of parsing
+    const updatedPickup = await Pickup.findOneAndUpdate(
+      { paymentId: txnid },
       {
         $set: {
           status: "Paid",
           isPaid: true,
-          paymentId: txnid,
           paidAmount: amount,
           paidAt: new Date()
         }
       },
       { returnDocument: 'after' }
     );
+
+    if (!updatedPickup) {
+      return res.redirect(`${frontendUrl}/dashboard?error=invalid_id`);
+    }
 
     // Notify volunteer
     if (updatedPickup?.assignedVolunteer) {
@@ -814,11 +817,12 @@ export async function handlePayUSuccess(req, res) {
       }).catch(err => console.error("User notification failed:", err));
     }
 
-    return res.redirect(`${process.env.FRONTEND_URL}/payment-success?txnid=${txnid}`);
+    return res.redirect(`${frontendUrl}/payment-success?txnid=${txnid}`);
 
   } catch (error) {
     console.error("Critical payment success error:", error);
-    return res.redirect(`${process.env.FRONTEND_URL}/dashboard?error=server_error`);
+    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+    return res.redirect(`${frontendUrl}/dashboard?error=server_error`);
   }
 }
 
@@ -832,17 +836,20 @@ export async function handlePayUFailure(req, res) {
     console.warn(`Payment failed for TXN: ${txnid}`);
 
     if (txnid) {
-      const parts = txnid.split("_");
-      const pickupId = parts[1];
-      await Pickup.findByIdAndUpdate(pickupId, { $set: { status: "Arrived" } });
+      await Pickup.findOneAndUpdate(
+        { paymentId: txnid },
+        { $set: { status: "Arrived", paymentId: null } }
+      );
     }
 
+    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
     const errorMessage = field9 || "payment_cancelled";
-    res.redirect(`${process.env.FRONTEND_URL}/payment-failure?error=${errorMessage}`);
+    res.redirect(`${frontendUrl}/payment-failure?error=${errorMessage}`);
 
   } catch (error) {
     console.error("Payment failure handler error:", error);
-    res.redirect(`${process.env.FRONTEND_URL}/payment-failure?error=server_error`);
+    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+    res.redirect(`${frontendUrl}/payment-failure?error=server_error`);
   }
 }
 // ==========================================
