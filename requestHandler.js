@@ -2182,7 +2182,7 @@ export async function initGeminiModel(apiKey) {
   }
 }
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+
 
 export async function chatWithGemini(req, res) {
   try {
