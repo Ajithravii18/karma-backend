@@ -2145,8 +2145,6 @@ export async function dismissHelp(req, res) {
 
 
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 // Global variable to cache the model name
 let cachedModelName = null;
 
