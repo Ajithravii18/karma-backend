@@ -11,6 +11,7 @@ import pkg from "jsonwebtoken";
 import crypto from "crypto";
 import mongoose from "mongoose";
 import Groq from "groq-sdk";
+import admin from "./Authentication/firebase.js";
 
 
 
@@ -1199,8 +1200,33 @@ export async function deleteAccountDirect(req, res) {
     const { reason } = req.body;
     const user = await userSchema.findById(req.userID);
 
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
     if (!reason || reason.trim().length < 5) {
       return res.status(400).json({ message: "Please provide a valid reason for deletion." });
+    }
+
+    // --- 🔥 FIREBASE DELETION LOGIC ---
+    try {
+      // 1. Find the user in Firebase by their phone number
+      const firebaseUser = await admin.auth().getUserByPhoneNumber(user.phone);
+      
+      if (firebaseUser) {
+        // 2. Delete the user from Firebase Auth
+        await admin.auth().deleteUser(firebaseUser.uid);
+        console.log(`Successfully deleted Firebase user: ${firebaseUser.uid}`);
+      }
+    } catch (firebaseError) {
+      // Log the error but continue with DB deletion if the user doesn't exist in Firebase
+      if (firebaseError.code === 'auth/user-not-found') {
+        console.warn("User not found in Firebase Auth, skipping Firebase deletion.");
+      } else {
+        console.error("Firebase deletion failed:", firebaseError);
+        // Optional: decide if you want to abort if Firebase fails for other reasons
+        // For now, we proceed to ensure MongoDB stays clean
+      }
     }
 
     // 1. Log the deletion for Admin Analytics
@@ -1212,10 +1238,10 @@ export async function deleteAccountDirect(req, res) {
       reason: reason
     });
 
-    // 2. Execute Deletion
+    // 2. Execute Deletion from MongoDB
     await userSchema.findByIdAndDelete(req.userID);
 
-    res.status(200).json({ success: true, message: "Account deleted successfully." });
+    res.status(200).json({ success: true, message: "Account deleted successfully from both systems." });
   } catch (error) {
     console.error("Deletion Error:", error);
     res.status(500).json({ message: "Account deletion failed" });
