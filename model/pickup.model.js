@@ -96,9 +96,10 @@ const pickupSchema = new mongoose.Schema(
     volFlagReason: { type: String, default: "" },
     helpRequested: { type: Boolean, default: false },
     helpAt: { type: Date, default: null },
-    helpMessage: { type: String, default: "" }
-
-
+    helpMessage: { type: String, default: "" },
+    
+    // ⚖️ WEIGHT RECORD
+    weight: { type: Number, default: 0 }
   },
   { timestamps: true }
 );

@@ -1421,6 +1421,8 @@ export async function completeCollection(req, res) {
     // 1. Matches the Task ID
     // 2. Ensures ONLY the volunteer assigned to this task can finish it
     // 3. Ensures status is 'Paid' (User must pay before volunteer can 'Complete')
+    const { weight } = req.body;
+
     const completed = await Pickup.findOneAndUpdate(
       {
         _id: id,
@@ -1428,7 +1430,10 @@ export async function completeCollection(req, res) {
         status: "Paid"
       },
       {
-        $set: { status: "Completed" }
+        $set: { 
+          status: "Completed",
+          weight: weight || 0
+        }
       },
       { returnDocument: 'after' } // Fixes the Mongoose warning
     );
