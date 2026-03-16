@@ -1208,24 +1208,20 @@ export async function deleteAccountDirect(req, res) {
       return res.status(400).json({ message: "Please provide a valid reason for deletion." });
     }
 
-    // --- 🔥 FIREBASE DELETION LOGIC ---
+    // --- 🔥 FIREBASE DELETION (Secondary Safeguard) ---
+    // The frontend already deletes auth.currentUser after OTP confirmation.
+    // This backend step is a fallback using the Firebase Admin SDK.
     try {
-      // 1. Find the user in Firebase by their phone number
       const firebaseUser = await admin.auth().getUserByPhoneNumber(user.phone);
-      
-      if (firebaseUser) {
-        // 2. Delete the user from Firebase Auth
-        await admin.auth().deleteUser(firebaseUser.uid);
-        console.log(`Successfully deleted Firebase user: ${firebaseUser.uid}`);
-      }
+      await admin.auth().deleteUser(firebaseUser.uid);
+      console.log(`[Firebase Admin] Deleted Firebase user UID: ${firebaseUser.uid} (phone: ${user.phone})`);
     } catch (firebaseError) {
-      // Log the error but continue with DB deletion if the user doesn't exist in Firebase
       if (firebaseError.code === 'auth/user-not-found') {
-        console.warn("User not found in Firebase Auth, skipping Firebase deletion.");
+        // Expected if the frontend already deleted the Firebase user — not an error
+        console.log(`[Firebase Admin] User ${user.phone} not found in Firebase (likely deleted by client). Proceeding.`);
       } else {
-        console.error("Firebase deletion failed:", firebaseError);
-        // Optional: decide if you want to abort if Firebase fails for other reasons
-        // For now, we proceed to ensure MongoDB stays clean
+        // Log other Firebase errors but do NOT block MongoDB deletion
+        console.error(`[Firebase Admin] Deletion failed for ${user.phone}:`, firebaseError.code, firebaseError.message);
       }
     }
 
