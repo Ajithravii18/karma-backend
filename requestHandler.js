@@ -1174,8 +1174,16 @@ export async function checkPhoneAvailability(req, res) {
 
 export async function updatePhoneDirect(req, res) {
   try {
-    const { newPhone } = req.body;
+    const { newPhone, firebaseUid } = req.body;
     const formattedPhone = newPhone.startsWith("+91") ? newPhone : `+91${newPhone}`;
+
+    // If the caller expects Firebase Auth to be updated too, enforce Firebase Admin availability up-front
+    if (firebaseUid && !admin.apps.length) {
+      return res.status(424).json({
+        success: false,
+        message: "Firebase Admin is not configured on the server, so Firebase Auth cannot be updated. Configure Firebase credentials and retry."
+      });
+    }
 
     // Verify again on backend that it's not taken
     const exists = await userSchema.findOne({ phone: formattedPhone });
@@ -1183,11 +1191,17 @@ export async function updatePhoneDirect(req, res) {
       return res.status(409).json({ message: "This phone number is already in use by another account." });
     }
 
+    // Optional: keep Firebase Auth in sync if the frontend provides the uid
+    // (Frontend should only call this after Firebase OTP verification)
+    if (firebaseUid) {
+      await admin.auth().updateUser(firebaseUid, { phoneNumber: formattedPhone });
+    }
+
     const user = await userSchema.findById(req.userID);
     user.phone = formattedPhone;
     await user.save();
 
-    res.status(200).json({ success: true, message: "Phone number updated successfully!", phone: formattedPhone });
+    res.status(200).json({ success: true, message: "Phone number updated successfully!", phone: formattedPhone, firebaseSynced: !!firebaseUid });
   } catch (error) {
     res.status(500).json({ message: "Phone update failed" });
   }
@@ -1197,7 +1211,7 @@ export async function updatePhoneDirect(req, res) {
 
 export async function deleteAccountDirect(req, res) {
   try {
-    const { reason } = req.body;
+    const { reason, firebaseUid } = req.body;
     const user = await userSchema.findById(req.userID);
 
     if (!user) {
@@ -1208,24 +1222,41 @@ export async function deleteAccountDirect(req, res) {
       return res.status(400).json({ message: "Please provide a valid reason for deletion." });
     }
 
-    // --- 🔥 FIREBASE DELETION LOGIC ---
+    // --- FIREBASE DELETION LOGIC ---
+    // Don’t silently claim success when Firebase isn’t configured; keep Mongo + Firebase consistent.
+    if (!admin.apps.length) {
+      return res.status(424).json({
+        success: false,
+        message: "Firebase Admin is not configured on the server, so the Firebase account cannot be deleted. Configure Firebase credentials and retry.",
+      });
+    }
+
+    let firebaseDeleted = false;
+    let firebaseUidResolved = firebaseUid || null;
+
     try {
-      // 1. Find the user in Firebase by their phone number
-      const firebaseUser = await admin.auth().getUserByPhoneNumber(user.phone);
-      
-      if (firebaseUser) {
-        // 2. Delete the user from Firebase Auth
-        await admin.auth().deleteUser(firebaseUser.uid);
-        console.log(`Successfully deleted Firebase user: ${firebaseUser.uid}`);
+      if (!firebaseUidResolved) {
+        // Default path: look up Firebase Auth user by the current DB phone number.
+        // If the phone was changed only in MongoDB (without syncing Firebase), this may not find the Firebase user.
+        const firebaseUser = await admin.auth().getUserByPhoneNumber(user.phone);
+        firebaseUidResolved = firebaseUser?.uid || null;
+      }
+
+      if (firebaseUidResolved) {
+        await admin.auth().deleteUser(firebaseUidResolved);
+        firebaseDeleted = true;
+        console.log(`Successfully deleted Firebase user: ${firebaseUidResolved}`);
       }
     } catch (firebaseError) {
-      // Log the error but continue with DB deletion if the user doesn't exist in Firebase
-      if (firebaseError.code === 'auth/user-not-found') {
+      if (firebaseError?.code === "auth/user-not-found") {
+        // If the Firebase user doesn't exist, we still allow deleting Mongo (nothing to delete in Firebase).
         console.warn("User not found in Firebase Auth, skipping Firebase deletion.");
       } else {
         console.error("Firebase deletion failed:", firebaseError);
-        // Optional: decide if you want to abort if Firebase fails for other reasons
-        // For now, we proceed to ensure MongoDB stays clean
+        return res.status(502).json({
+          success: false,
+          message: "Firebase deletion failed; account was NOT deleted from the database to avoid partial deletion.",
+        });
       }
     }
 
@@ -1241,7 +1272,12 @@ export async function deleteAccountDirect(req, res) {
     // 2. Execute Deletion from MongoDB
     await userSchema.findByIdAndDelete(req.userID);
 
-    res.status(200).json({ success: true, message: "Account deleted successfully from both systems." });
+    res.status(200).json({
+      success: true,
+      message: "Account deleted.",
+      firebaseDeleted,
+      firebaseUid: firebaseUidResolved
+    });
   } catch (error) {
     console.error("Deletion Error:", error);
     res.status(500).json({ message: "Account deletion failed" });
