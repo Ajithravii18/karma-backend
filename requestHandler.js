@@ -66,7 +66,7 @@ export async function login(req, res) {
     if (!user) return res.status(401).json({ message: "Phone number not found" });
 
     // 🕵️ Check if account is frozen
-    if (user.isFrozen && phone !== "+918888855555") {
+    if (user.isFrozen) {
       return res.status(403).json({
         message: "Your account has been frozen for violating community guidelines. Access is denied."
       });
@@ -77,7 +77,6 @@ export async function login(req, res) {
     if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
 
     let role = user.role || "user";
-    if (phone === "+918888855555") role = "admin";
 
     const token = sign(
       { userID: user._id, role: role },
@@ -101,11 +100,6 @@ export async function getUser(req, res) {
 
     // 1. Get the base role from the database
     let role = req.user.role || "user";
-
-    // 2. APPLY THE ADMIN OVERRIDE (Same as login logic)
-    if (req.user.phone === "+918888855555") {
-      role = "admin";
-    }
 
     res.status(200).json({
       id: req.user._id,
@@ -252,12 +246,7 @@ export async function createPollutionReport(req, res) {
     await newReport.save();
 
     // 3. Find Admins for Notification
-    const admins = await userSchema.find({
-      $or: [
-        { role: "admin" },
-        { phone: "+918888855555" }
-      ]
-    });
+    const admins = await userSchema.find({ role: "admin" });
 
     // 4. Generate Notifications
     if (admins.length > 0) {

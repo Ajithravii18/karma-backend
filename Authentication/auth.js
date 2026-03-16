@@ -54,11 +54,10 @@ export default async function authMiddleware(req, res, next) {
 // Add this helper at the bottom of auth.js or in a new file
 
 export const isAdmin = (req, res, next) => {
-  // Check if role is admin OR if it's the specific hardcoded Admin phone
-  const isSuperAdmin = req.user?.phone === "+918888855555";
+  // Check if role is admin (from token or user object)
   const hasAdminRole = req.role === 'admin' || req.user?.role === 'admin';
 
-  if (!isSuperAdmin && !hasAdminRole) {
+  if (!hasAdminRole) {
     return res.status(403).json({
       success: false,
       message: "Access Denied: Admin privileges required."
