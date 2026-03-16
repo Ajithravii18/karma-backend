@@ -54,8 +54,10 @@ export default async function authMiddleware(req, res, next) {
 // Add this helper at the bottom of auth.js or in a new file
 
 export const isAdmin = (req, res, next) => {
-  // Check if role is admin (from token or user object)
-  const hasAdminRole = req.role === 'admin' || req.user?.role === 'admin';
+  // Check if role is admin (from token or user object) - make comparison case-insensitive
+  const roleFromReq = (req.role || "").toLowerCase();
+  const roleFromUser = (req.user?.role || "").toLowerCase();
+  const hasAdminRole = roleFromReq === 'admin' || roleFromUser === 'admin';
 
   if (!hasAdminRole) {
     return res.status(403).json({
@@ -67,7 +69,8 @@ export const isAdmin = (req, res, next) => {
 };
 
 export const isVolunteer = (req, res, next) => {
-  if (req.role !== 'volunteer' && req.role !== 'admin') {
+  const role = (req.role || "").toLowerCase();
+  if (role !== 'volunteer' && role !== 'admin') {
     return res.status(403).json({ message: "Only volunteers can perform this action." });
   }
   next();

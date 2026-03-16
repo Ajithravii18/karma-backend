@@ -1310,8 +1310,9 @@ export async function updateUserRole(req, res) {
   try {
     const { userId } = req.params;
     const { newRole } = req.body;
+    const lowerRole = (newRole || "user").toLowerCase();
 
-    const updateData = { role: newRole };
+    const updateData = { role: lowerRole };
 
     // 🕵️ If promoting to volunteer, assign the next unique Agent ID
     if (newRole === "volunteer") {
