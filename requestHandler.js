@@ -2186,11 +2186,22 @@ export async function dismissHelp(req, res) {
 
 export async function chatWithGemini(req, res) {
   try {
-    const { messages } = req.body;
+    let { messages, prompt, history } = req.body;
+
+    // ✅ Adapt to different frontend formats
+    if (!messages && prompt) {
+      messages = [
+        ...(history || []).map(m => ({
+          role: m.type === 'bot' ? 'assistant' : 'user',
+          content: m.text
+        })),
+        { role: 'user', content: prompt }
+      ];
+    }
 
     // ✅ Validate input
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ message: "Messages array required" });
+      return res.status(400).json({ message: "Messages or prompt required" });
     }
 
     // ✅ Limit history (last 10 messages to avoid overload)
