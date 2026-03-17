@@ -2178,44 +2178,53 @@ export async function dismissHelp(req, res) {
 
 
 
-
-
-
-
-
+import Groq from "groq-sdk";
 
 export async function chatWithGemini(req, res) {
   try {
     let { messages, prompt, history } = req.body;
 
-    // ✅ Adapt to different frontend formats
+    // ✅ Normalize input (support prompt + history format)
     if (!messages && prompt) {
       messages = [
-        ...(history || []).map(m => ({
-          role: m.type === 'bot' ? 'assistant' : 'user',
-          content: m.text
-        })),
-        { role: 'user', content: prompt }
+        ...(Array.isArray(history)
+          ? history.map((m) => ({
+              role: m.type === "bot" ? "assistant" : "user",
+              content: m.text || "",
+            }))
+          : []),
+        { role: "user", content: prompt },
       ];
     }
 
-    // ✅ Validate input
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ message: "Messages or prompt required" });
+    // ✅ Validate messages
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({
+        message: "Messages or prompt required",
+      });
     }
 
-    // ✅ Limit history (last 10 messages to avoid overload)
-    const limitedMessages = messages.slice(-10);
+    // ✅ Clean + filter invalid messages
+    const cleanedMessages = messages
+      .filter((m) => m && m.content)
+      .map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content),
+      }));
+
+    // ✅ Limit history (last 10 messages)
+    const limitedMessages = cleanedMessages.slice(-10);
 
     // ✅ Initialize Groq
     const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY
+      apiKey: process.env.GROQ_API_KEY,
     });
 
     // ✅ AI Request
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      temperature: 0.5, // slightly higher for more natural conversation
+      temperature: 0.6,
+      max_tokens: 800,
       messages: [
         {
           role: "system",
@@ -2229,21 +2238,26 @@ Platform features:
 
 Behavior:
 - Be friendly, conversational, and encouraging.
-- Always acknowledge greetings (like "hi", "hello") and introduce yourself briefly if asked.
-- Use bullet points and simple explanations.
+- Always respond clearly and simply.
+- Use bullet points when helpful.
 - Promote eco-friendly habits.
-- If the user asks about topics completely unrelated to sustainability, environment, or E-Karma (like general trivia or unrelated news), politely steer the conversation back by saying how you can help with E-Karma services.`
+- If the user asks unrelated questions, politely guide them back to E-Karma services.`,
         },
-        ...limitedMessages
-      ]
+        ...limitedMessages,
+      ],
     });
 
-    const reply = completion.choices[0].message.content;
+    // ✅ Safe response extraction
+    const reply =
+      completion?.choices?.[0]?.message?.content ||
+      "Sorry, I couldn't process that. Please try again.";
 
-    res.json({ response: reply });
-
+    return res.json({ response: reply });
   } catch (error) {
-    console.error("Groq AI error:", error);
-    res.status(500).json({ message: "AI service error" });
+    console.error("Groq AI error:", error?.message || error);
+
+    return res.status(500).json({
+      message: "AI service error. Please try again later.",
+    });
   }
 }
