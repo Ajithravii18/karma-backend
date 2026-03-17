@@ -2207,28 +2207,6 @@ export async function chatWithGemini(req, res) {
     // ✅ Limit history (last 10 messages to avoid overload)
     const limitedMessages = messages.slice(-10);
 
-    // ✅ Optional: Basic keyword filter (extra strict enforcement)
-    const lastUserMessage = limitedMessages
-      .filter(msg => msg.role === "user")
-      .pop()?.content?.toLowerCase() || "";
-
-    const allowedKeywords = [
-      "waste", "recycle", "plastic", "environment", "pollution",
-      "food", "donation", "garbage", "clean", "sustainability",
-      "eco", "climate", "compost", "pickup", "e-karma"
-    ];
-
-    const isEnvironmental = allowedKeywords.some(keyword =>
-      lastUserMessage.includes(keyword)
-    );
-
-    if (!isEnvironmental) {
-      return res.json({
-        response:
-          "I'm sorry, I am an environmental assistant so I only have knowledge about nature, sustainability, and the E-Karma platform. I'd be happy to answer any questions you have about keeping our planet clean!"
-      });
-    }
-
     // ✅ Initialize Groq
     const groq = new Groq({
       apiKey: process.env.GROQ_API_KEY
@@ -2237,7 +2215,7 @@ export async function chatWithGemini(req, res) {
     // ✅ AI Request
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      temperature: 0.3, // more controlled responses
+      temperature: 0.5, // slightly higher for more natural conversation
       messages: [
         {
           role: "system",
@@ -2251,15 +2229,10 @@ Platform features:
 
 Behavior:
 - Be friendly, conversational, and encouraging.
+- Always acknowledge greetings (like "hi", "hello") and introduce yourself briefly if asked.
 - Use bullet points and simple explanations.
 - Promote eco-friendly habits.
-
-STRICT RULE:
-IF the user asks anything NOT related to environment, sustainability, waste management, or E-Karma,
-THEN reply ONLY with:
-"I'm sorry, I am an environmental assistant so I only have knowledge about nature, sustainability, and the E-Karma platform. I'd be happy to answer any questions you have about keeping our planet clean!"
-
-This rule overrides all other instructions.`
+- If the user asks about topics completely unrelated to sustainability, environment, or E-Karma (like general trivia or unrelated news), politely steer the conversation back by saying how you can help with E-Karma services.`
         },
         ...limitedMessages
       ]
