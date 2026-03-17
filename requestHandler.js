@@ -2182,49 +2182,81 @@ export async function dismissHelp(req, res) {
 
 
 
+
+
 export async function chatWithGemini(req, res) {
   try {
-    const { prompt } = req.body;
+    const { messages } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ message: "Prompt is required" });
+    // ✅ Validate input
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ message: "Messages array required" });
     }
 
+    // ✅ Limit history (last 10 messages to avoid overload)
+    const limitedMessages = messages.slice(-10);
+
+    // ✅ Optional: Basic keyword filter (extra strict enforcement)
+    const lastUserMessage = limitedMessages
+      .filter(msg => msg.role === "user")
+      .pop()?.content?.toLowerCase() || "";
+
+    const allowedKeywords = [
+      "waste", "recycle", "plastic", "environment", "pollution",
+      "food", "donation", "garbage", "clean", "sustainability",
+      "eco", "climate", "compost", "pickup", "e-karma"
+    ];
+
+    const isEnvironmental = allowedKeywords.some(keyword =>
+      lastUserMessage.includes(keyword)
+    );
+
+    if (!isEnvironmental) {
+      return res.json({
+        response:
+          "I'm sorry, I am an environmental assistant so I only have knowledge about nature, sustainability, and the E-Karma platform. I'd be happy to answer any questions you have about keeping our planet clean!"
+      });
+    }
+
+    // ✅ Initialize Groq
     const groq = new Groq({
       apiKey: process.env.GROQ_API_KEY
     });
 
+    // ✅ AI Request
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
+      temperature: 0.3, // more controlled responses
       messages: [
         {
           role: "system",
-          content: `You are the e-Karma Assistant, a friendly, empathetic, and highly knowledgeable guide for the E-Karma Sustainable Waste Management platform in Kerala. Your goal is to be conversational and encouraging.
+          content: `You are the e-Karma Assistant, a friendly and helpful guide for the E-Karma Sustainable Waste Management platform in Kerala.
 
-Platform Knowledge:
-1. Waste Pickups: Users can schedule paid waste pickups (via PayU). Volunteers collect the waste.
-2. Food Donations: Users can report leftover food to be shared with those in need.
-3. Pollution Reporting: Users can upload images and map locations to report public pollution spots, which volunteers will then clean up.
-4. Community: E-Karma is driven by citizens, working with volunteers and admins to track impact and get rewards for keeping the environment clean.
+Platform features:
+1. Waste Pickup – Users can schedule paid pickups collected by volunteers.
+2. Food Donation – Users can report leftover food for people in need.
+3. Pollution Reporting – Users can upload images and locations to report pollution.
+4. Community – Users earn rewards and track environmental impact.
 
-Guidelines:
-- Always be conversational, polite, and enthusiastically helpful. Use formatting like bullet points or bold text to make your answers easy to read.
-- Environmental Questions: If a user asks a general environmental question (e.g., "how to plant a tree", "how to reduce plastic", "tips for composting"), answer it fully and enthusiastically! Connect their question back to E-Karma's mission of sustainability whenever natural.
-- Platform Help: Guide users step-by-step if they ask how to use the app (e.g., navigating to "Waste Pickup", "Food Sharing", or "Report Pollution").
-- STRICT BOUNDARIES (CRITICAL): You are an environmental assistant. If the user asks ANY question completely unrelated to the environment, nature, sustainability, or the E-Karma platform (for example: cooking recipes like "how to make chicken biriyani", coding questions, sports, politics, movies, or general chatting), you MUST REFUSE TO ANSWER. Reply exactly like this: "I'm sorry, I am an environmental assistant so I only have knowledge about nature, sustainability, and the E-Karma platform. I'd be happy to answer any questions you have about keeping our planet clean!"`
+Behavior:
+- Be friendly, conversational, and encouraging.
+- Use bullet points and simple explanations.
+- Promote eco-friendly habits.
+
+STRICT RULE:
+IF the user asks anything NOT related to environment, sustainability, waste management, or E-Karma,
+THEN reply ONLY with:
+"I'm sorry, I am an environmental assistant so I only have knowledge about nature, sustainability, and the E-Karma platform. I'd be happy to answer any questions you have about keeping our planet clean!"
+
+This rule overrides all other instructions.`
         },
-        {
-          role: "user",
-          content: prompt
-        }
+        ...limitedMessages
       ]
     });
 
     const reply = completion.choices[0].message.content;
 
-    res.json({
-      response: reply
-    });
+    res.json({ response: reply });
 
   } catch (error) {
     console.error("Groq AI error:", error);
