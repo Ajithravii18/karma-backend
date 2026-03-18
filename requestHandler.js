@@ -2123,6 +2123,12 @@ export async function unflagReport(req, res) {
         notifyTarget = targetReport.assignedVolunteer || targetReport.claimedBy;
         notifyMsg = "Your security flag on a mission has been reviewed and the case is now marked as resolved.";
       }
+      
+      // 🔥 NEW: Also clear ALL misconduct reports in Review collection for this mission
+      await Review.updateMany(
+        { requestId: id },
+        { $set: { isReport: false } }
+      );
     }
 
     // Always clear top-level flags to be safe/consistent
@@ -2164,7 +2170,21 @@ export async function dismissHelp(req, res) {
     else if (type === 'pollution') Model = Pollution;
     else Model = Pickup;
 
-    await Model.findByIdAndUpdate(id, { helpRequested: false });
+    const mission = await Model.findByIdAndUpdate(id, { helpRequested: false });
+    
+    // 🔔 Notify the user who requested help
+    if (mission) {
+      const targetUser = mission.userId || mission.user;
+      if (targetUser) {
+        await Notification.create({
+          recipient: targetUser,
+          type: 'SYSTEM',
+          message: `✅ Your live help request for mission #${id.slice(-6)} has been resolved by an Admin.`,
+          link: '/dashboard'
+        });
+      }
+    }
+
     res.status(200).json({ success: true, message: "Help session terminated" });
   } catch (err) {
     res.status(500).json({ message: "Failed to dismiss request" });
