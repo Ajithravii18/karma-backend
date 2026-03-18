@@ -2079,7 +2079,7 @@ export async function liveHelpRequest(req, res) {
 export async function unflagReport(req, res) {
   try {
     const { type, id } = req.params;
-    const { reviewId } = req.body;
+    const { reviewId } = req.body || {};
 
     let Model;
     switch (type) {
