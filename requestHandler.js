@@ -762,7 +762,8 @@ export async function handlePayUSuccess(req, res) {
     const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
 
     if (!txnid || status !== "success") {
-      return res.redirect(`${frontendUrl}/dashboard?error=payment_failed`);
+      return res.redirect(`${frontendUrl}/payment-failure?error=payment_failed`);
+
     }
 
     // Find pickup by txnid instead of parsing
@@ -780,7 +781,8 @@ export async function handlePayUSuccess(req, res) {
     );
 
     if (!updatedPickup) {
-      return res.redirect(`${frontendUrl}/dashboard?error=invalid_id`);
+      return res.redirect(`${frontendUrl}/payment-failure?error=invalid_id`);
+
     }
 
     // Notify volunteer
@@ -812,7 +814,8 @@ export async function handlePayUSuccess(req, res) {
   } catch (error) {
     console.error("Critical payment success error:", error);
     const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-    return res.redirect(`${frontendUrl}/dashboard?error=server_error`);
+    return res.redirect(`${frontendUrl}/payment-failure?error=server_error`);
+
   }
 }
 
