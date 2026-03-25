@@ -744,7 +744,9 @@ export async function createPayUOrder(req, res) {
       hash,
       surl: `${process.env.SERVER_URL}/api/payment/payu-success`,
       furl: `${process.env.SERVER_URL}/api/payment/payu-failure`,
+      curl: `${process.env.SERVER_URL}/api/payment/payu-cancel`,
       action: "https://test.payu.in/_payment" // Test environment endpoint
+
     });
   } catch (error) {
     console.error("Payment init error:", error);

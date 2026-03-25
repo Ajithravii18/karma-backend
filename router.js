@@ -91,6 +91,8 @@ router.patch("/api/volunteer/flag-report/:type/:id", authMiddleware, isVolunteer
 router.post("/api/payment/payu-order", authMiddleware, rh.createPayUOrder);
 router.post("/api/payment/payu-success", rh.handlePayUSuccess);
 router.post("/api/payment/payu-failure", rh.handlePayUFailure);
+router.post("/api/payment/payu-cancel", rh.handlePayUFailure);
+
 
 // ==========================================
 // 6. ADMIN OPERATIONS (🛡️ Role Protected)
