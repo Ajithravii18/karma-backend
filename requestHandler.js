@@ -1238,13 +1238,6 @@ export async function deleteAccountDirect(req, res) {
   }
 }
 
-
-// 🗑️ ACCOUNT DELETION (Simplified for Firebase)
-// (Function was removed here to be cleaner)
-
-
-
-
 export async function deleteReport(req, res) {
   const { type, id } = req.params;
   if (type === 'pickup') await Pickup.findByIdAndDelete(id);
@@ -1478,29 +1471,7 @@ export async function completeCollection(req, res) {
   }
 }
 
-export async function completePickup(req, res) {
-  try {
 
-    const { id } = req.params;
-    const completed = await Pickup.findByIdAndUpdate(
-      id,
-      { status: "Completed" },
-      { returnDocument: 'after' } // ✅ Fixed
-    );
-
-    // Notify the User that their waste is gone!
-    await Notification.create({
-      recipient: completed.userId,
-      type: "PICKUP_COMPLETE",
-      message: "🚚 Pickup completed successfully! Thank you for keeping the city clean.",
-      link: "/dashboard"
-    });
-
-    res.status(200).json({ success: true, message: "Mission Finished!" });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to complete mission" });
-  }
-}
 
 
 // ==========================================
@@ -1819,31 +1790,7 @@ export async function unclaimPollutionMission(req, res) {
 }
 
 
-export async function completeFoodDonation(req, res) {
-  try {
-    const { id } = req.params;
 
-    const food = await LeftoverFoodReport.findOneAndUpdate(
-      { _id: id, claimedBy: req.userID, status: "Claimed" },
-      { $set: { status: "Delivered", completedAt: new Date() } },
-      { returnDocument: 'after' }
-    );
-
-    if (!food) return res.status(403).json({ message: "Unauthorized or already delivered." });
-
-    // Notify the donor (User) that their food reached people
-    await Notification.create({
-      recipient: food.userId,
-      type: 'SYSTEM',
-      message: `❤️ Success! Your food donation from ${food.placeName} has been delivered.`,
-      link: '/dashboard'
-    });
-
-    res.status(200).json({ success: true, message: "Delivery confirmed!" });
-  } catch (error) {
-    res.status(500).json({ message: "Server Error" });
-  }
-}
 
 // ==========================================
 // 9. USER REPORTING OPERATIONS
