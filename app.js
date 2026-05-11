@@ -10,7 +10,7 @@ const app = express();
 // 1. Standard JSON parser
 app.use(express.json());
 
-// 2. URL-encoded parser (Required for PayU Callback)
+// 2. URL-encoded parser
 app.use(express.urlencoded({ extended: true }));
 
 // 3. Updated CORS configuration
@@ -25,8 +25,8 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
-    } else if (origin === 'null' || origin.includes('payu') || origin.endsWith(".vercel.app") || origin.includes('payumoney')) {
-      callback(null, true); // Allow PayU callbacks
+    } else if (origin === 'null' || origin.endsWith(".vercel.app")) {
+      callback(null, true); // Allow specific domain callbacks
     } else {
       callback(new Error(`Not allowed by CORS: ${origin}`));
     }

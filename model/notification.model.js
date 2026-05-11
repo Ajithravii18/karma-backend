@@ -21,8 +21,8 @@ const notificationSchema = new mongoose.Schema({
     enum: [
       'PICKUP_ASSIGNED',   // For Volunteers (When a user requests)
       'VOLUNTEER_ARRIVED', // For Users (Trigger: Mark Arrival)
-      'PAYMENT_RECEIVED',  // For Volunteers (Trigger: PayU Success)
-      'PAYMENT_SUCCESS',   // For Users (Trigger: PayU Success)
+      'PAYMENT_RECEIVED',  // For Volunteers (Trigger: Razorpay Success)
+      'PAYMENT_SUCCESS',   // For Users (Trigger: Razorpay Success)
       'PICKUP_FINISHED',   // For Users (Trigger: Confirm Collection)
       'FOOD_CLAIMED',      // For Donors (Volunteer claimed their food)
       'FOOD_DELIVERED',    // For Donors (Volunteer delivered the food)

@@ -12,6 +12,7 @@ import crypto from "crypto";
 import mongoose from "mongoose";
 import Groq from "groq-sdk";
 import admin from "./Authentication/firebase.js";
+import Razorpay from "razorpay";
 
 
 
@@ -704,49 +705,40 @@ export async function markNotificationAsRead(req, res) {
 }
 
 // ==========================================
-// 4. PAYU PAYMENT (FIXED SURL/FURL)
+// 4. RAZORPAY PAYMENT
 // ==========================================
 
-
-
-
-export async function createPayUOrder(req, res) {
+export async function createRazorpayOrder(req, res) {
   try {
     const { pickupId, amount } = req.body;
 
-    // Ensure volunteer has arrived
     const pickup = await Pickup.findById(pickupId);
     if (!pickup || pickup.status !== "Arrived") {
       return res.status(400).json({ message: "Payment is only available once the volunteer arrives." });
     }
 
-    // Generate a unique 17-character txnid (max 25 allowed)
-    const txnid = `TXN_${Date.now()}`;
+    const instance = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_key',
+      key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret',
+    });
 
-    // Store this transaction ID in the pickup document to find it on callback
-    await Pickup.findByIdAndUpdate(pickupId, { $set: { paymentId: txnid } });
+    const options = {
+      amount: amount * 100, // amount in smallest currency unit
+      currency: "INR",
+      receipt: `receipt_order_${pickupId}`,
+    };
 
-    const productinfo = "Waste_Pickup_Fee";
-    const firstname = req.user.name.split(" ")[0];
-    const email = req.user.email || "test@example.com";
+    const order = await instance.orders.create(options);
 
-    const hashString = `${process.env.PAYU_KEY}|${txnid}|${amount}|${productinfo}|${firstname}|${email}|||||||||||${process.env.PAYU_SALT}`;
-    const hash = crypto.createHash("sha512").update(hashString).digest("hex");
+    if (!order) return res.status(500).send("Some error occured");
+
+    await Pickup.findByIdAndUpdate(pickupId, { $set: { paymentId: order.id } });
 
     res.status(200).json({
-      key: process.env.PAYU_KEY,
-      txnid,
-      amount,
-      productinfo,
-      firstname,
-      email,
-      phone: req.user.phone,
-      hash,
-      surl: `${process.env.SERVER_URL}/api/payment/payu-success`,
-      furl: `${process.env.SERVER_URL}/api/payment/payu-failure`,
-      curl: `${process.env.SERVER_URL}/api/payment/payu-cancel`,
-      action: "https://test.payu.in/_payment" // Test environment endpoint
-
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_key',
     });
   } catch (error) {
     console.error("Payment init error:", error);
@@ -755,36 +747,47 @@ export async function createPayUOrder(req, res) {
 }
 
 // ----------------------------
-// HANDLE PAYU SUCCESS
+// HANDLE RAZORPAY SUCCESS VERIFICATION
 // ----------------------------
-export async function handlePayUSuccess(req, res) {
+export async function verifyRazorpayPayment(req, res) {
   try {
-    const { txnid, status, amount } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
 
-    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret')
+      .update(sign.toString())
+      .digest("hex");
 
-    if (!txnid || status !== "success") {
-      return res.redirect(`${frontendUrl}/payment-failure?error=payment_failed`);
-
+    if (razorpay_signature !== expectedSign) {
+      console.warn(`Payment signature mismatch for Order: ${razorpay_order_id}`);
+      await Pickup.findOneAndUpdate(
+        { paymentId: razorpay_order_id },
+        { $set: { paymentId: null } }
+      );
+      return res.status(400).json({ message: "Invalid signature sent!" });
     }
 
-    // Find pickup by txnid instead of parsing
+    // Find pickup by order_id
     const updatedPickup = await Pickup.findOneAndUpdate(
-      { paymentId: txnid },
+      { paymentId: razorpay_order_id },
       {
         $set: {
           status: "Paid",
           isPaid: true,
-          paidAmount: amount,
-          paidAt: new Date()
+          paidAt: new Date(),
+          razorpayPaymentId: razorpay_payment_id
         }
       },
       { returnDocument: 'after' }
     );
 
     if (!updatedPickup) {
-      return res.redirect(`${frontendUrl}/payment-failure?error=invalid_id`);
-
+      return res.status(404).json({ message: "Pickup not found for this order" });
     }
 
     // Notify volunteer
@@ -811,40 +814,11 @@ export async function handlePayUSuccess(req, res) {
       }).catch(err => console.error("User notification failed:", err));
     }
 
-    return res.redirect(`${frontendUrl}/payment-success?txnid=${txnid}`);
+    return res.status(200).json({ message: "Payment verified successfully", txnid: razorpay_payment_id });
 
   } catch (error) {
     console.error("Critical payment success error:", error);
-    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-    return res.redirect(`${frontendUrl}/payment-failure?error=server_error`);
-
-  }
-}
-
-// ----------------------------
-// HANDLE PAYU FAILURE
-// ----------------------------
-export async function handlePayUFailure(req, res) {
-  try {
-    const { txnid, field9 } = req.body;
-
-    console.warn(`Payment failed for TXN: ${txnid}`);
-
-    if (txnid) {
-      await Pickup.findOneAndUpdate(
-        { paymentId: txnid },
-        { $set: { status: "Arrived", paymentId: null } }
-      );
-    }
-
-    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-    const errorMessage = field9 || "payment_cancelled";
-    res.redirect(`${frontendUrl}/payment-failure?error=${errorMessage}`);
-
-  } catch (error) {
-    console.error("Payment failure handler error:", error);
-    const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-    res.redirect(`${frontendUrl}/payment-failure?error=server_error`);
+    res.status(500).json({ message: "Internal Server Error!" });
   }
 }
 // ==========================================

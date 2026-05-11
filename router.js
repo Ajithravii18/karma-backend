@@ -88,10 +88,8 @@ router.patch("/api/volunteer/flag-report/:type/:id", authMiddleware, isVolunteer
 // ==========================================
 // 5. PAYMENT OPERATIONS
 // ==========================================
-router.post("/api/payment/payu-order", authMiddleware, rh.createPayUOrder);
-router.post("/api/payment/payu-success", rh.handlePayUSuccess);
-router.post("/api/payment/payu-failure", rh.handlePayUFailure);
-router.post("/api/payment/payu-cancel", rh.handlePayUFailure);
+router.post("/api/payment/razorpay-order", authMiddleware, rh.createRazorpayOrder);
+router.post("/api/payment/razorpay-verify", rh.verifyRazorpayPayment);
 
 
 // ==========================================
