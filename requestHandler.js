@@ -2168,7 +2168,7 @@ export async function chatWithGemini(req, res) {
 
     // ✅ AI Request
     const completion = await groq.chat.completions.create({
-      model: "gpt-oss-20b",
+      model: "openai/gpt-oss-20b",
       temperature: 0.6,
       max_tokens: 800,
       messages: [
